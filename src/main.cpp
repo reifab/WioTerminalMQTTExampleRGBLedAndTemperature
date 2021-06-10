@@ -9,8 +9,8 @@
 
 //============================== WIFISETUP ==============================
 // Update these with values suitable for your network.
-const char *ssid = "IoTB";      // your network SSID
-const char *password = "Zukunftswerkstatt*5"; // your network password
+const char *ssid = "tbd";      // your network SSID
+const char *password = "tbd"; // your network password
  
 const char *ID = "Wio-Terminal-Client";  // Name of our device, must be unique
 const char *pubTopic = "outTopic";  // Topic to publish to
