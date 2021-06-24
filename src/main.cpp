@@ -9,46 +9,38 @@
 
 //============================== WIFISETUP ==============================
 // Update these with values suitable for your network.
-const char *ssid = "tbd";      // your network SSID
-const char *password = "tbd"; // your network password
+const char *ssid = "IoTB";      // your network SSID
+const char *password = "Zukunftswerkstatt*5"; // your network password
  
-const char *ID = "Wio-Terminal-Client";  // Name of our device, must be unique
-const char *pubTopic = "outTopic";  // Topic to publish to
-const char *subTopic = "inTopic";  // Topic to subcribe to
+const char *ID = "Wio-Terminal-1-Haus1";  // Name of our device, must be unique
+const char *pubTopic = "H291/HausX/1OG/BME680SensorDaten";  // Topic to publish to
+const char *subTopic = "H291/HausX/1OG/RelaisHeizung";  // Topic to subcribe to
 const char *server = "172.20.1.31"; // Server URL
 
-//============================== RGB LEDs ===============================
-#define NUM_LEDS 10
-#define LEDS_DATA_PIN D0
-Adafruit_NeoPixel ledStrip(NUM_LEDS, LEDS_DATA_PIN, NEO_GRB + NEO_KHZ800);
+//============================== Relays ==========================
+#define RELAIS_CTRL_PIN D0
 
 //============================== Sensor BME280 ==========================
 #define IIC_ADDR uint8_t(0x76)
 Seeed_BME680 bme680(IIC_ADDR); /* IIC PROTOCOL */
 /*Timeinterval to publish sensor data*/
-TimeInvervall timerToPublish(5000);
+TimeInvervall timerToPublish(1000);
 
 WiFiClient wifiClient;
 PubSubClient client(wifiClient);
 
 //============================== Incoming Data ===========================
 void callback(char* topic, byte* payload, unsigned int length) {
-  StaticJsonDocument<200> doc;
+  StaticJsonDocument<50> doc;
   Serial.println("-------new message from broker-----");
   Serial.print("topic:");
   Serial.println(topic);
   Serial.print("data:");
   Serial.write(payload, length);
   Serial.println();
-
   deserializeJson(doc, payload);
-
-  int red = doc["r"];
-  int green = doc["g"];
-  int blue = doc["b"];
-
-  ledStrip.setPixelColor(1, red, green, blue);
-  ledStrip.show();
+  int stateRelays = doc["stateRelays"];
+  digitalWrite(RELAIS_CTRL_PIN, stateRelays);
 }
 
 //============================== Reconnect if necessary ==================
@@ -81,7 +73,8 @@ void reconnect() {
 //============================== Setup ==================
 void setup()
 {
-
+  pinMode(RELAIS_CTRL_PIN, OUTPUT);
+  digitalWrite(RELAIS_CTRL_PIN, 0);
   Serial.begin(115200);
   //while (!Serial); // Wait for Serial to be ready
   if (!bme680.init()) {
@@ -90,8 +83,6 @@ void setup()
   Serial.print("Attempting to connect to SSID: ");
   Serial.println(ssid);
   WiFi.begin(ssid, password);
-  ledStrip.begin();
-  ledStrip.show();
 
   // attempt to connect to Wifi network:
   while (WiFi.status() != WL_CONNECTED)
@@ -118,9 +109,16 @@ void loop()
   }
   client.loop();
   if(timerToPublish.isTimeElapsed()){
-    float temperature =  bme680.read_temperature();
-    Serial.println(temperature);
-    String temperatureAsString = String(temperature);
-    client.publish(pubTopic,temperatureAsString.c_str());
+    StaticJsonDocument<128> doc;
+    char sensorDataAsCharArray[128];
+
+    doc["temperature"] = bme680.read_temperature();
+    doc["pressure"] =  bme680.read_pressure();
+    doc["humidity"] =  bme680.read_humidity();
+    doc["gas"] =  bme680.read_gas();
+  
+    serializeJson(doc,sensorDataAsCharArray);
+    Serial.println(sensorDataAsCharArray);
+    client.publish(pubTopic,sensorDataAsCharArray);
   }
 }
