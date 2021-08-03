@@ -3,18 +3,19 @@
 #include <PubSubClient.h>
 #include <Adafruit_NeoPixel.h>
 #include <ArduinoJson.h>
-#include <seeed_bme680.h>
 #include <TimePeriod.h>
 #include <Wire.h>
 
 //============================== WIFISETUP ==============================
 // Update these with values suitable for your network.
-const char *ssid = "tbd";      // your network SSID
+const char *ssid = "IoTB";      // your network SSID
 const char *password = "tbd"; // your network password
  
 const char *ID = "Wio-Terminal-Client";  // Name of our device, must be unique
-const char *pubTopic = "outTopic";  // Topic to publish to
-const char *subTopic = "inTopic";  // Topic to subcribe to
+const char *pubTopic = "H291/Haus1";   // Topic to publish to
+const char *pubTopicLichtstaerke = "H291/Haus1/1OG/Lichtstaerke";   // Topic to publish to
+const char *pubTopicWindow = "H291/Haus1/2OG/Fenster";   // Topic to publish to
+const char *subTopic = "H291/Haus1/1OG/RGBLeds";        // Topic to subcribe to
 const char *server = "172.20.1.31"; // Server URL
 
 //============================== RGB LEDs ===============================
@@ -22,11 +23,8 @@ const char *server = "172.20.1.31"; // Server URL
 #define LEDS_DATA_PIN D0
 Adafruit_NeoPixel ledStrip(NUM_LEDS, LEDS_DATA_PIN, NEO_GRB + NEO_KHZ800);
 
-//============================== Sensor BME280 ==========================
-#define IIC_ADDR uint8_t(0x76)
-Seeed_BME680 bme680(IIC_ADDR); /* IIC PROTOCOL */
 /*Timeinterval to publish sensor data*/
-TimeInvervall timerToPublish(5000);
+TimeInvervall timerToPublish(1000);
 
 WiFiClient wifiClient;
 PubSubClient client(wifiClient);
@@ -34,20 +32,68 @@ PubSubClient client(wifiClient);
 //============================== Incoming Data ===========================
 void callback(char* topic, byte* payload, unsigned int length) {
   StaticJsonDocument<200> doc;
+  uint8_t red;
+  uint8_t green;
+  uint8_t blue;
+  bool switchAllLEDsOnUntilPixelIndex;
+  uint32_t pixelIndex;
+  uint32_t color;
+
   Serial.println("-------new message from broker-----");
   Serial.print("topic:");
   Serial.println(topic);
   Serial.print("data:");
   Serial.write(payload, length);
   Serial.println();
-
   deserializeJson(doc, payload);
 
-  int red = doc["r"];
-  int green = doc["g"];
-  int blue = doc["b"];
+  if(doc["r"].isNull()){
+    red = 0;
+  }else{
+    red = doc["r"];
+  }
 
-  ledStrip.setPixelColor(1, red, green, blue);
+  if(doc["g"].isNull()){
+    green = 0;
+  }else{
+    green = doc["g"];
+  }
+
+  if(doc["b"].isNull()){
+    blue = 0;
+  }else{
+    blue = doc["b"];
+  }
+
+  if(doc["pixelIndex"].isNull()){
+    pixelIndex = 0;
+  }else{
+    pixelIndex = doc["pixelIndex"];
+  }
+
+  if(doc["switchAllLEDsOnUntilPixelIndex"].isNull()){
+    switchAllLEDsOnUntilPixelIndex = false;
+  }else{
+    switchAllLEDsOnUntilPixelIndex = doc["switchAllLEDsOnUntilPixelIndex"];
+  }
+
+  color = ledStrip.Color(red, green, blue);
+
+  if(pixelIndex >= NUM_LEDS){
+    pixelIndex = 9;
+  }
+  if(doc["pixelIndex"].isNull()){
+    ledStrip.fill(color);
+  }else{
+    if(switchAllLEDsOnUntilPixelIndex){
+      ledStrip.clear();
+      for(uint8_t i=0; i<=pixelIndex; i++){
+        ledStrip.setPixelColor(i, color);
+      }
+    }else{
+      ledStrip.setPixelColor(pixelIndex, color);
+    }
+  }
   ledStrip.show();
 }
 
@@ -81,12 +127,10 @@ void reconnect() {
 //============================== Setup ==================
 void setup()
 {
-
+  pinMode(WIO_LIGHT, INPUT);
+  pinMode(D2, INPUT);
   Serial.begin(115200);
   //while (!Serial); // Wait for Serial to be ready
-  if (!bme680.init()) {
-        Serial.println("bme680 init failed ! can't find device!");
-  }
   Serial.print("Attempting to connect to SSID: ");
   Serial.println(ssid);
   WiFi.begin(ssid, password);
@@ -118,9 +162,17 @@ void loop()
   }
   client.loop();
   if(timerToPublish.isTimeElapsed()){
-    float temperature =  bme680.read_temperature();
-    Serial.println(temperature);
-    String temperatureAsString = String(temperature);
-    client.publish(pubTopic,temperatureAsString.c_str());
+    uint16_t lightIntensity =  analogRead(WIO_LIGHT);
+    Serial.println("Lichtintensität " + lightIntensity);
+    String lightIntensityAsString = String(lightIntensity);
+    client.publish(pubTopicLichtstaerke,lightIntensityAsString.c_str());
+    if (digitalRead(D2) == HIGH) {
+      client.publish(pubTopicWindow,"closed");
+      Serial.println("Magnetschalter geschlossen");
+    }else{
+      client.publish(pubTopicWindow,"open");
+      Serial.println("Magnetschalter offen");
+     
+    }
   }
 }
