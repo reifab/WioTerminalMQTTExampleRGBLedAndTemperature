@@ -20,7 +20,7 @@ const char *server = "172.20.1.31"; // Server URL
 //============================== Relays ==========================
 #define RELAIS_CTRL_PIN D0
 
-//============================== Sensor BME280 ==========================
+//============================== Sensor BME680 ==========================
 #define IIC_ADDR uint8_t(0x76)
 Seeed_BME680 bme680(IIC_ADDR); /* IIC PROTOCOL */
 /*Timeinterval to publish sensor data*/
